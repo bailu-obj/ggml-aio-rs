@@ -1,0 +1,9 @@
+[submodule "ggml-aio-sys/cc/ggml"]
+	path = ggml-aio-sys/cc/ggml
+	url = https://github.com/ggml-org/ggml.git
+[submodule "ggml-aio-sys/cc/llama.cpp"]
+	path = ggml-aio-sys/cc/llama.cpp
+	url = https://github.com/ggml-org/llama.cpp.git
+[submodule "ggml-aio-sys/cc/whisper.cpp"]
+	path = ggml-aio-sys/cc/whisper.cpp
+	url = https://github.com/ggml-org/whisper.cpp.git
