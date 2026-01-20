@@ -3,6 +3,8 @@
 //
 
 #include "silero-vad.h"
+#include <algorithm>
+#include <vector>
 #define SENSE_VOICE_VAD_MAX_NODES 1024
 #define VAD_CHUNK_SIZE 640
 /*
@@ -19,7 +21,7 @@
 
 
 ggml_cgraph *silero_vad_build_graph(
-        sense_voice_context &ctx, sense_voice_state &state){
+        sense_voice_context &ctx, sense_voice_state &state) {
 
     const auto &model = ctx.vad_model.model;
 
@@ -44,19 +46,16 @@ ggml_cgraph *silero_vad_build_graph(
     {
         cur = ggml_conv_1d(ctx0, model->stft.forward_basis_buffer, chunk, 128, 0, 1);
         // chunk operation by ggml view, equals torch.chunk(x, 2) in pytorch
-        struct ggml_tensor * real_part = ggml_view_2d(ctx0, cur, cur->ne[0], cur->ne[1] / 2, cur->nb[1], 0);
+        struct ggml_tensor *real_part = ggml_view_2d(ctx0, cur, cur->ne[0], cur->ne[1] / 2, cur->nb[1], 0);
         ggml_set_name(real_part, "real_part");
-        struct ggml_tensor * image_part = ggml_view_2d(ctx0, cur, cur->ne[0], cur->ne[1] / 2, cur->nb[1], cur->nb[0] * cur->ne[0] * cur->ne[1] / 2);
+        struct ggml_tensor *image_part = ggml_view_2d(ctx0, cur, cur->ne[0], cur->ne[1] / 2, cur->nb[1], cur->nb[0] * cur->ne[0] * cur->ne[1] / 2);
         ggml_set_name(image_part, "image_part");
         // magnitude, equals torch.sqrt(real_part ** 2 + imag_part ** 2)
         cur = ggml_sqrt(ctx0,
                         ggml_add(ctx0,
                                  ggml_mul(ctx0, real_part, real_part),
-                                 ggml_mul(ctx0, image_part, image_part)
-                                 )
-                        );
+                                 ggml_mul(ctx0, image_part, image_part)));
         ggml_set_name(cur, "magnitude");
-
     }
 
     // encoder
@@ -67,28 +66,27 @@ ggml_cgraph *silero_vad_build_graph(
             cur = ggml_relu(ctx0, cur);
 
             cur = ggml_conv_1d(ctx0, model->encoders_layer[1].reparam_conv_w, cur, 2, 1, 1);
-            cur = ggml_add(ctx0, cur,  ggml_cont(ctx0, ggml_transpose(ctx0, model->encoders_layer[1].reparam_conv_b)));
+            cur = ggml_add(ctx0, cur, ggml_cont(ctx0, ggml_transpose(ctx0, model->encoders_layer[1].reparam_conv_b)));
             cur = ggml_relu(ctx0, cur);
 
             cur = ggml_conv_1d(ctx0, model->encoders_layer[2].reparam_conv_w, cur, 2, 1, 1);
-            cur = ggml_add(ctx0, cur,  ggml_cont(ctx0, ggml_transpose(ctx0, model->encoders_layer[2].reparam_conv_b)));
+            cur = ggml_add(ctx0, cur, ggml_cont(ctx0, ggml_transpose(ctx0, model->encoders_layer[2].reparam_conv_b)));
             cur = ggml_relu(ctx0, cur);
 
             cur = ggml_conv_1d(ctx0, model->encoders_layer[3].reparam_conv_w, cur, 1, 1, 1);
-            cur = ggml_add(ctx0, cur,  ggml_cont(ctx0, ggml_transpose(ctx0, model->encoders_layer[3].reparam_conv_b)));
+            cur = ggml_add(ctx0, cur, ggml_cont(ctx0, ggml_transpose(ctx0, model->encoders_layer[3].reparam_conv_b)));
             cur = ggml_relu(ctx0, cur);
         }
-
     }
 
     //decoder
     {
 
-        struct ggml_tensor* in_lstm_hidden_state = ggml_new_tensor_1d(ctx0, cur->type, cur->ne[1]);
-        struct ggml_tensor*  in_lstm_context = ggml_new_tensor_1d(ctx0, cur->type, cur->ne[1]);
+        struct ggml_tensor *in_lstm_hidden_state = ggml_new_tensor_1d(ctx0, cur->type, cur->ne[1]);
+        struct ggml_tensor *in_lstm_context = ggml_new_tensor_1d(ctx0, cur->type, cur->ne[1]);
 
-        struct ggml_tensor* out_lstm_hidden_state;
-        struct ggml_tensor*  out_lstm_context;
+        struct ggml_tensor *out_lstm_hidden_state;
+        struct ggml_tensor *out_lstm_context;
 
         ggml_set_name(in_lstm_context, "in_lstm_context");
         ggml_set_name(in_lstm_hidden_state, "in_lstm_hidden_state");
@@ -107,21 +105,17 @@ ggml_cgraph *silero_vad_build_graph(
 
         struct ggml_tensor *gates = ggml_add(
                 ctx0,
-                ggml_add(ctx0, ggml_mul_mat(ctx0,
-                                            model->decoder.lstm_weight_ih,
-                                            ggml_transpose(ctx0, cur)),
+                ggml_add(ctx0, ggml_mul_mat(ctx0, model->decoder.lstm_weight_ih, ggml_transpose(ctx0, cur)),
                          model->decoder.lstm_bias_ih),
 
-                ggml_add(ctx0, ggml_mul_mat(ctx0,
-                                            model->decoder.lstm_weight_hh,
-                                            in_lstm_hidden_state),
+                ggml_add(ctx0, ggml_mul_mat(ctx0, model->decoder.lstm_weight_hh, in_lstm_hidden_state),
                          model->decoder.lstm_bias_hh));
         ggml_set_name(gates, "gates");
 
-        struct ggml_tensor * input_gates = ggml_sigmoid(ctx0, ggml_view_2d(ctx0, gates, gates->ne[0] / 4, gates->ne[1] , gates->nb[1], 0));
-        struct ggml_tensor * forget_gates = ggml_sigmoid(ctx0, ggml_view_2d(ctx0, gates, gates->ne[0] / 4, gates->ne[1], gates->nb[1], gates->nb[0] / 4 * gates->ne[0]));
-        struct ggml_tensor * cell_gate = ggml_tanh(ctx0, ggml_view_2d(ctx0, gates, gates->ne[0] / 4, gates->ne[1], gates->nb[1], 2 * gates->nb[0] / 4 * gates->ne[0]));
-        struct ggml_tensor * out_gates = ggml_sigmoid(ctx0, ggml_view_2d(ctx0, gates, gates->ne[0] / 4, gates->ne[1], gates->nb[1], 3 * gates->nb[0] / 4 * gates->ne[0]));
+        struct ggml_tensor *input_gates = ggml_sigmoid(ctx0, ggml_view_2d(ctx0, gates, gates->ne[0] / 4, gates->ne[1], gates->nb[1], 0));
+        struct ggml_tensor *forget_gates = ggml_sigmoid(ctx0, ggml_view_2d(ctx0, gates, gates->ne[0] / 4, gates->ne[1], gates->nb[1], gates->nb[0] / 4 * gates->ne[0]));
+        struct ggml_tensor *cell_gate = ggml_tanh(ctx0, ggml_view_2d(ctx0, gates, gates->ne[0] / 4, gates->ne[1], gates->nb[1], 2 * gates->nb[0] / 4 * gates->ne[0]));
+        struct ggml_tensor *out_gates = ggml_sigmoid(ctx0, ggml_view_2d(ctx0, gates, gates->ne[0] / 4, gates->ne[1], gates->nb[1], 3 * gates->nb[0] / 4 * gates->ne[0]));
 
         ggml_set_name(input_gates, "input_gates");
         ggml_set_name(forget_gates, "forget_gates");
@@ -129,9 +123,8 @@ ggml_cgraph *silero_vad_build_graph(
         ggml_set_name(out_gates, "out_gates");
 
         out_lstm_context = ggml_add(ctx0,
-                                          ggml_mul(ctx0, forget_gates, in_lstm_context),
-                                          ggml_mul(ctx0, input_gates, cell_gate)
-                                          );
+                                    ggml_mul(ctx0, forget_gates, in_lstm_context),
+                                    ggml_mul(ctx0, input_gates, cell_gate));
 
         ggml_set_name(out_lstm_context, "out_lstm_context");
         ggml_set_output(out_lstm_context);
@@ -145,7 +138,6 @@ ggml_cgraph *silero_vad_build_graph(
         ggml_set_name(cur, "decoder_out");
         cur = ggml_sigmoid(ctx0, cur);
         ggml_set_name(cur, "logit");
-
     }
 
     ggml_set_output(cur);
@@ -157,11 +149,12 @@ ggml_cgraph *silero_vad_build_graph(
 
 bool silero_vad_encode_internal(sense_voice_context &ctx,
                                 sense_voice_state &state,
-                                std::vector<float> chunk,
+                                const double *samples,
+                                const int n_samples,
                                 const int n_threads,
-                                float &speech_prob){
+                                float &speech_prob) {
     {
-        auto & sched = ctx.state->sched_vad.sched;
+        auto &sched = ctx.state->sched_vad.sched;
         ggml_cgraph *gf = silero_vad_build_graph(ctx, state);
 
         //          ggml_backend_sched_set_eval_callback(sched,  ctx->params.cb_eval, &ctx->params.cb_eval_user_data);
@@ -175,14 +168,13 @@ bool silero_vad_encode_internal(sense_voice_context &ctx,
         {
 
             struct ggml_tensor *data = ggml_graph_get_tensor(gf, "audio_chunk");
-            ggml_backend_tensor_set(data, chunk.data(), 0, ggml_nbytes(data));
+            ggml_backend_tensor_set(data, samples, 0, ggml_nbytes(data));
 
             struct ggml_tensor *in_lstm_context = ggml_graph_get_tensor(gf, "in_lstm_context");
             struct ggml_tensor *in_lstm_hidden_state = ggml_graph_get_tensor(gf, "in_lstm_hidden_state");
 
             ggml_backend_tensor_copy(state.vad_lstm_context, in_lstm_context);
             ggml_backend_tensor_copy(state.vad_lstm_hidden_state, in_lstm_hidden_state);
-
         }
 
         if (!ggml_graph_compute_helper(sched, gf, n_threads)) {
@@ -195,9 +187,17 @@ bool silero_vad_encode_internal(sense_voice_context &ctx,
             ggml_backend_tensor_copy(lstm_context, state.vad_lstm_context);
             struct ggml_tensor *lstm_hidden_state = ggml_graph_get_tensor(gf, "out_lstm_hidden_state");
             ggml_backend_tensor_copy(lstm_hidden_state, state.vad_lstm_hidden_state);
-
         }
         ggml_backend_tensor_get(ggml_graph_get_tensor(gf, "logit"), &speech_prob, 0, sizeof(speech_prob));
     }
     return true;
+}
+
+float sense_voice_get_speech_prob(struct sense_voice_context *ctx,
+                                  const double *samples, int n_samples, int n_processors) {
+    float prob = 0.0f;
+    if (!silero_vad_encode_internal(*ctx, *ctx->state, samples, n_samples, n_processors, prob)) {
+        return -1.0f;
+    }
+    return prob;
 }

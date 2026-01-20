@@ -6,8 +6,8 @@
 #define SENSEVOICE_CPP_SILERO_VAD_H
 
 
-#include <ggml.h>
 #include "sense-voice-common.h"
+#include <ggml.h>
 
 struct silero_vad_stft {
     struct ggml_tensor *forward_basis_buffer;
@@ -21,7 +21,7 @@ struct silero_vad_encoder_layer {
 
 
 struct silero_vad_decoder {
-    
+
     // lstm cell
     struct ggml_tensor *lstm_weight_ih;
     struct ggml_tensor *lstm_bias_ih;
@@ -29,9 +29,8 @@ struct silero_vad_decoder {
     struct ggml_tensor *lstm_bias_hh;
 
     // conv1d
-    struct ggml_tensor * decoder_conv_w;
-    struct ggml_tensor * decoder_conv_b;
-
+    struct ggml_tensor *decoder_conv_w;
+    struct ggml_tensor *decoder_conv_b;
 };
 
 struct silero_vad {
@@ -42,9 +41,8 @@ struct silero_vad {
 
 // Progress callback
 typedef void (*silero_vad_progress_callback)(struct silero_vad_context *ctx,
-                                              struct silero_vad_state *state,
-                                              int progress, void *user_data);
-
+                                             struct silero_vad_state *state,
+                                             int progress, void *user_data);
 
 
 // Various functions for loading a ggml silero_vad model.
@@ -60,13 +58,9 @@ SENSEVOICE_API struct ggml_cgraph *silero_vad_build_graph(
 
 SENSEVOICE_API bool silero_vad_encode_internal(sense_voice_context &ctx,
                                                sense_voice_state &state,
-                                               std::vector<float> chunk,
+                                               const double *samples,
+                                               const int n_samples,
                                                const int n_threads,
                                                float &speech_prob);
-
-SENSEVOICE_API double silero_vad_with_state(sense_voice_context &ctx,
-                           sense_voice_state &state,
-                           std::vector<float> &pcmf32,
-                           int n_processors);
 
 #endif//SENSEVOICE_CPP_SILERO_VAD_H

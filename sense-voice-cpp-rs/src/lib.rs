@@ -1,5 +1,5 @@
 use std::{
-    ffi::{c_int, CStr, CString},
+    ffi::{CStr, CString, c_int},
     ptr::null_mut,
     str::FromStr,
     thread,
@@ -279,6 +279,16 @@ impl SenseVoiceFullParamsBuilder {
     pub fn build(self) -> SenseVoiceFullParams {
         self.params
     }
+}
+
+pub fn get_speech_prob(ctx: &mut SenseVoiceContext, data: &[f64]) -> f32 {
+    if data.is_empty() {
+        return -1.0f32;
+    }
+    let ret = unsafe {
+        ggml_aio_sys::sense_voice_get_speech_prob(ctx.ctx, data.as_ptr(), data.len() as c_int, 8)
+    };
+    ret
 }
 
 pub fn full_parallel(

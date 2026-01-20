@@ -101,6 +101,8 @@ SENSE_VOICE_API struct sense_voice_context_params sense_voice_context_default_pa
 SENSE_VOICE_API struct sense_voice_context *sense_voice_small_init_from_file_with_params(const char *path_model, struct sense_voice_context_params params);
 SENSE_VOICE_API struct sense_voice_context *sense_voice_small_init_from_file_with_params_no_state(const char *path_model, struct sense_voice_context_params params);
 SENSE_VOICE_API struct sense_voice_context *sense_voice_init_with_params_no_state(const char *path_model, struct sense_voice_context_params params);
+SENSE_VOICE_API float sense_voice_get_speech_prob(struct sense_voice_context *ctx,
+                                                  const double *samples, int n_samples, int n_processors);
 SENSE_VOICE_API int sense_voice_full_parallel(struct sense_voice_context *ctx,
                                               const struct sense_voice_full_params *params,
                                               const double *samples,
