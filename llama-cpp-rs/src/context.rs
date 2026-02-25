@@ -317,11 +317,15 @@ impl<'model> LlamaContext<'model> {
         adapter: &mut LlamaLoraAdapter,
         scale: f32,
     ) -> Result<(), LlamaLoraAdapterSetError> {
+        let adapter_ptr = adapter.lora_adapter.as_ptr();
+        let adapters: [*mut ggml_aio_sys::llama_adapter_lora; 1] = [adapter_ptr as *mut _];
+        let scales: [f32; 1] = [scale];
         let err_code = unsafe {
-            ggml_aio_sys::llama_set_adapter_lora(
+            ggml_aio_sys::llama_set_adapters_lora(
                 self.context.as_ptr(),
-                adapter.lora_adapter.as_ptr(),
-                scale,
+                adapters.as_ptr() as *mut _,
+                1,
+                scales.as_ptr() as *mut _,
             )
         };
         if err_code != 0 {
@@ -341,15 +345,7 @@ impl<'model> LlamaContext<'model> {
         &self,
         adapter: &mut LlamaLoraAdapter,
     ) -> Result<(), LlamaLoraAdapterRemoveError> {
-        let err_code = unsafe {
-            ggml_aio_sys::llama_rm_adapter_lora(
-                self.context.as_ptr(),
-                adapter.lora_adapter.as_ptr(),
-            )
-        };
-        if err_code != 0 {
-            return Err(LlamaLoraAdapterRemoveError::ErrorResult(err_code));
-        }
+        unsafe { ggml_aio_sys::llama_adapter_lora_free(adapter.lora_adapter.as_ptr()) };
 
         tracing::debug!("Remove lora adapter");
         Ok(())
