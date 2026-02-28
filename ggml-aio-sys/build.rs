@@ -146,7 +146,7 @@ fn main() {
         }
     }
 
-    let mut bindings = bindgen::Builder::default().header("wrapper.h");
+    let bindings = bindgen::Builder::default().header("wrapper.h");
 
     #[cfg(feature = "metal")]
     let bindings = bindings.header(
@@ -156,7 +156,18 @@ fn main() {
             .to_string(),
     );
 
+    // Configure mtmd feature if enabled
+    #[cfg(feature = "mtmd")]
     let bindings = bindings
+        .header("wrapper_mtmd.h")
+        .allowlist_function("mtmd_.*")
+        .allowlist_type("mtmd_.*")
+        .allowlist_function("clip_.*")
+        .allowlist_type("clip_.*");
+
+    let bindings = bindings
+        .clang_arg(format!("-I{}", cc_root.join("llama.cpp/include/").display()))
+        .clang_arg(format!("-I{}", cc_root.join("llama.cpp/tools/mtmd/").display()))
         .clang_arg(format!("-I{}", cc_root.join("models/").display()))
         .clang_arg(format!("-I{}", cc_root.display()))
         .clang_arg(format!("-I{}", cc_root.join("ggml/include/").display()))
@@ -195,21 +206,26 @@ fn main() {
         .expect("Failed to generate bindings");
 
     println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rerun-if-changed=wrapper_mtmd.h");
     println!(
         "cargo:rerun-if-changed={}",
         cc_root.join("ggml/src").display()
     );
     println!(
         "cargo:rerun-if-changed={}",
-        cc_root.join("models/llama.cpp/src").display()
+        cc_root.join("llama.cpp/src").display()
     );
     println!(
         "cargo:rerun-if-changed={}",
-        cc_root.join("models/whisper.cpp/src").display()
+        cc_root.join("llama.cpp/tools/mtmd").display()
     );
     println!(
         "cargo:rerun-if-changed={}",
-        cc_root.join("models/SenseVoice.cpp/src").display()
+        cc_root.join("whisper.cpp/src").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        cc_root.join("sense-voice.cpp/src").display()
     );
 
     let bindings_path = out.join("bindings.rs");
@@ -333,6 +349,58 @@ fn main() {
     }
     if cfg!(feature = "cuda") {
         println!("cargo:rustc-link-lib=static=ggml-cuda");
+    }
+
+    // Build mtmd library directly with cc::Build
+    if cfg!(feature = "mtmd") {
+        let mtmd_src = cc_root.join("llama.cpp/tools/mtmd");
+        let llama_src = cc_root.join("llama.cpp");
+        let mut mtmd_build = cc::Build::new();
+        mtmd_build
+            .cpp(true)
+            .include(&mtmd_src)
+            .include(&llama_src)
+            .include(llama_src.join("include"))
+            .include(llama_src.join("ggml/include"))
+            .include(llama_src.join("common"))
+            .include(llama_src.join("vendor"))
+            .include(cc_root.join("ggml/include"))
+            .flag_if_supported("-std=c++17")
+            .flag_if_supported("-Wno-cast-qual")
+            .pic(true);
+
+        if cfg!(target_os = "windows") {
+            mtmd_build.flag("/std:c++17");
+        }
+
+        // Collect all .cpp files in tools/mtmd and its subdirectories
+        for entry in std::fs::read_dir(&mtmd_src).expect("Failed to read mtmd directory") {
+            let entry = entry.expect("Failed to read entry");
+            let path = entry.path();
+            if path.extension().map_or(false, |ext| ext == "cpp") {
+                let filename = path.file_name().unwrap().to_str().unwrap();
+                // Skip CLI / deprecation-warning binaries — we only want the library sources
+                if filename == "mtmd-cli.cpp" || filename == "deprecation-warning.cpp" {
+                    continue;
+                }
+                mtmd_build.file(&path);
+            }
+        }
+
+        // Also include model files
+        let models_dir = mtmd_src.join("models");
+        if models_dir.exists() {
+            for entry in std::fs::read_dir(&models_dir).expect("Failed to read models directory") {
+                let entry = entry.expect("Failed to read entry");
+                let path = entry.path();
+                if path.extension().map_or(false, |ext| ext == "cpp") {
+                    mtmd_build.file(&path);
+                }
+            }
+        }
+
+        mtmd_build.compile("mtmd");
+        println!("cargo:rustc-link-lib=static=mtmd");
     }
 }
 

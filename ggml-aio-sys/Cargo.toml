@@ -10,6 +10,7 @@ include = [
     "README.md",
     "LICENSE*",
     "wrapper.h",
+    "wrapper_mtmd.h",
     "build.rs",
 
     # Your crate's Rust code
@@ -27,6 +28,11 @@ include = [
     "cc/llama.cpp/ggml/src/**/*.[ch]",
     "cc/llama.cpp/vendor/**/*.[ch]",
 
+    # mtmd (multimodal) support
+    "cc/llama.cpp/tools/mtmd/*.h",
+    "cc/llama.cpp/tools/mtmd/*.cpp",
+    "cc/llama.cpp/tools/mtmd/models/*.h",
+    "cc/llama.cpp/tools/mtmd/models/*.cpp",
 
     # whisper.cpp essentials
     "cc/whisper.cpp/include/whisper.h",
@@ -67,3 +73,5 @@ native = []
 openmp = []
 # Only has an impact on Android.
 shared-stdcxx = []
+# Multimodal support (MTMD)
+mtmd = []

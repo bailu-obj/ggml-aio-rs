@@ -26,6 +26,7 @@ metal = ["ggml-aio-sys/metal"]
 vulkan = ["ggml-aio-sys/vulkan"]
 openmp = ["ggml-aio-sys/openmp"]
 sampler = []
+mtmd = ["ggml-aio-sys/mtmd"]
 # Only has an impact on Android.
 android-shared-stdcxx = ["ggml-aio-sys/shared-stdcxx"]
 
