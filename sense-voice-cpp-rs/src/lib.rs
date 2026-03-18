@@ -281,16 +281,6 @@ impl SenseVoiceFullParamsBuilder {
     }
 }
 
-pub fn get_speech_prob(ctx: &mut SenseVoiceContext, data: &[f64]) -> f32 {
-    if data.is_empty() {
-        return -1.0f32;
-    }
-    let ret = unsafe {
-        ggml_aio_sys::sense_voice_get_speech_prob(ctx.ctx, data.as_ptr(), data.len() as c_int, 8)
-    };
-    ret
-}
-
 pub fn full_parallel(
     ctx: &mut SenseVoiceContext,
     params: SenseVoiceFullParams,
