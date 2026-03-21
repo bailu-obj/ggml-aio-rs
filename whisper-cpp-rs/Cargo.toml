@@ -4,6 +4,7 @@ version = "0.14.2"
 edition = "2024"
 description = "Rust bindings for whisper.cpp"
 license = "Unlicense"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -34,3 +35,7 @@ log_backend = ["dep:log"]
 # Bring logs into Rust via the tracing crate. *Warning*: not mutually exclusive with log_backend,
 # will result in duplicate logs if both are enabled and one consumes logs from the other.
 tracing_backend = ["dep:tracing"]
+
+[package.metadata.docs.rs]
+no-default-features = true
+features = []

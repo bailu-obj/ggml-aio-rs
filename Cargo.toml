@@ -5,6 +5,7 @@ members = [
     "llama-cpp-rs",
     "sense-voice-cpp-rs",
     "whisper-cpp-rs",
+    "qwen3-tts-cpp-rs",
 ]
 
 [workspace.dependencies]

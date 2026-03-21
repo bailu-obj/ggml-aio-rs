@@ -78,7 +78,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let mut samples = Vec::with_capacity(SAMPLE_SIZE);
         for _ in 0..SAMPLE_SIZE {
-            samples.push(rng.gen::<T>());
+            samples.push(rng.r#gen::<T>());
         }
         samples
     }

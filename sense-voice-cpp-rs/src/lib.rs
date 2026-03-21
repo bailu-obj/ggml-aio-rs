@@ -317,7 +317,12 @@ pub fn full_parallel(
 impl Default for SenseVoiceContextParameters {
     fn default() -> Self {
         Self {
-            use_gpu: cfg!(feature = "_gpu"),
+            use_gpu: cfg!(any(
+                feature = "cuda",
+                feature = "metal",
+                feature = "vulkan",
+                feature = "hipblas"
+            )),
             use_itn: false,
             flash_attn: false,
             gpu_device: 0,

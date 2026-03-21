@@ -95,9 +95,13 @@ impl LlamaChatMessage {
 /// The Rope type that's used within the model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RopeType {
+    /// Standard rope implementation.
     Norm,
+    /// GPT-NeoX-style rope implementation.
     NeoX,
+    /// Multi-dimensional rope.
     MRope,
+    /// Vision-oriented rope implementation.
     Vision,
 }
 

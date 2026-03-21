@@ -102,13 +102,15 @@ impl LlamaTokenDataArray {
             "Size of the returned array exceeds the data buffer's capacity!"
         );
         if !ptr::eq(c_llama_token_data_array.data, data) {
-            ptr::copy(
+            unsafe {
+                ptr::copy(
                 c_llama_token_data_array.data,
                 data,
                 c_llama_token_data_array.size,
-            );
+                );
+            }
         }
-        self.data.set_len(c_llama_token_data_array.size);
+        unsafe { self.data.set_len(c_llama_token_data_array.size) };
 
         self.sorted = c_llama_token_data_array.sorted;
         self.selected = c_llama_token_data_array

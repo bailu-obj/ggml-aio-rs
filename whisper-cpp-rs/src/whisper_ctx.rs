@@ -486,7 +486,12 @@ pub struct WhisperContextParameters<'a> {
 impl<'a> Default for WhisperContextParameters<'a> {
     fn default() -> Self {
         Self {
-            use_gpu: cfg!(feature = "_gpu"),
+            use_gpu: cfg!(any(
+                feature = "cuda",
+                feature = "metal",
+                feature = "vulkan",
+                feature = "hipblas"
+            )),
             flash_attn: false,
             gpu_device: 0,
             dtw_parameters: DtwParameters::default(),

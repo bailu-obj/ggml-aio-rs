@@ -4,6 +4,7 @@ description = "llama.cpp bindings for Rust"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -35,4 +36,5 @@ android-shared-stdcxx = ["ggml-aio-sys/shared-stdcxx"]
 workspace = true
 
 [package.metadata.docs.rs]
+no-default-features = true
 features = ["sampler"]

@@ -155,7 +155,6 @@ version = "0.1.103"
 dependencies = [
  "bindgen",
  "cc",
- "cfg-if",
  "cmake",
  "find_cuda_helper",
  "fs_extra",
@@ -309,6 +308,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc74d9a594b72ae6656596548f56f667211f8a97b3d4c3d467150794690dc40a"
 dependencies = [
  "proc-macro2",
+]
+
+[[package]]
+name = "qwen3-tts-cpp-rs"
+version = "0.1.0"
+dependencies = [
+ "ggml-aio-sys",
+ "hound",
 ]
 
 [[package]]

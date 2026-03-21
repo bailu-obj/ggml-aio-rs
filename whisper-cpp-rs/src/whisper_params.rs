@@ -574,7 +574,7 @@ impl<'a, 'b> FullParams<'a, 'b> {
         ) where
             F: FnMut(i32),
         {
-            let user_data = &mut *(user_data as *mut F);
+            let user_data = unsafe { &mut *(user_data as *mut F) };
             user_data(progress);
         }
 
@@ -613,7 +613,7 @@ impl<'a, 'b> FullParams<'a, 'b> {
         where
             F: FnMut() -> bool,
         {
-            let user_data = &mut *(user_data as *mut F);
+            let user_data = unsafe { &mut *(user_data as *mut F) };
             user_data()
         }
 

@@ -1,0 +1,25 @@
+[package]
+name = "qwen3-tts-cpp-rs"
+version = "0.1.0"
+edition = "2024"
+description = "Rust bindings for qwen3-tts.cpp (GGML TTS)"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[dependencies]
+ggml-aio-sys = { workspace = true }
+
+[dev-dependencies]
+hound = "3.5.0"
+
+[features]
+default = []
+cuda = ["ggml-aio-sys/cuda"]
+hipblas = ["ggml-aio-sys/hipblas"]
+metal = ["ggml-aio-sys/metal"]
+vulkan = ["ggml-aio-sys/vulkan"]
+openmp = ["ggml-aio-sys/openmp"]
+
+[package.metadata.docs.rs]
+no-default-features = true
+features = []

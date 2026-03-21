@@ -4,71 +4,65 @@ extern crate bindgen;
 
 use cmake::Config;
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() {
-    // Iterate over all environment variables
-    for (key, value) in env::vars() {
-        if key.starts_with("CARGO_FEATURE_") {
-            let feature = key
-                .strip_prefix("CARGO_FEATURE_")
-                .unwrap()
-                .to_lowercase()
-                .replace("_", "-");
-            println!("Enabled feature: {}", feature);
+    println!("cargo:rerun-if-changed=build.rs");
+
+    if env::var_os("GGML_AIO_SYS_VERBOSE").is_some() {
+        for (key, _) in env::vars() {
+            if key.starts_with("CARGO_FEATURE_") {
+                let feature = key
+                    .strip_prefix("CARGO_FEATURE_")
+                    .unwrap()
+                    .to_lowercase()
+                    .replace('_', "-");
+                println!("cargo:warning=enabled feature: {feature}");
+            }
         }
     }
 
-    let target = env::var("TARGET").unwrap();
-    let arch: &str = target.split('-').nth(0).expect("Invalid TARGET format");
+    let target = env::var("TARGET").expect("TARGET must be set by Cargo");
+    let arch: &str = target.split('-').next().expect("Invalid TARGET format");
     let is_android = target.contains("android");
+    let is_windows_target = target.contains("windows");
 
-    let out = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("Failed to get CARGO_MANIFEST_DIR");
-    let cc_root = PathBuf::from(manifest_dir.to_string()).join("cc");
+    let out = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR must be set by Cargo"));
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set");
+    let cc_root = PathBuf::from(&manifest_dir).join("cc");
 
     let mut config = Config::new(&cc_root);
 
-    // Link C++ standard library
     if let Some(cpp_stdlib) = get_cpp_link_stdlib(&target) {
-        println!("cargo:rustc-link-lib=dylib={}", cpp_stdlib);
+        println!("cargo:rustc-link-lib=dylib={cpp_stdlib}");
     }
 
-    // Android-specific configuration
     if is_android {
-        // Ensure NDK environment variables are set
+        println!("cargo:rerun-if-env-changed=ANDROID_NDK_HOME");
+        println!("cargo:rerun-if-env-changed=NDK_HOME");
+
         let ndk_home = env::var("ANDROID_NDK_HOME")
             .or_else(|_| env::var("NDK_HOME"))
             .expect("ANDROID_NDK_HOME or NDK_HOME must be set for Android builds");
         let ndk = PathBuf::from(ndk_home);
 
-        // Map Rust target to Android ABI
         let android_abi = match arch {
             "aarch64" => "arm64-v8a",
-            _ => panic!("Unsupported Android architecture: {}", arch),
+            _ => panic!("Unsupported Android architecture: {arch}"),
         };
-
-        if arch.contains("aarch64") {
-            config.cflag("-march=armv8.7a");
-            config.cxxflag("-march=armv8.7a");
-        }  else {
-            // Rather than guessing just fail.
-            panic!("Unsupported Android target {arch}");
-        }
+        config.cflag("-march=armv8.7a");
+        config.cxxflag("-march=armv8.7a");
 
         let toolchain_cmake = ndk
             .join("build")
             .join("cmake")
             .join("android.toolchain.cmake");
 
-        // Set Android-specific flags
         config.define("CMAKE_TOOLCHAIN_FILE", toolchain_cmake);
 
         config.define("ANDROID_ABI", android_abi);
-        config.define("ANDROID_PLATFORM", format!("android-28"));
+        config.define("ANDROID_PLATFORM", "android-28");
         config.define("GGML_LLAMAFILE", "OFF");
-        println!("cargo:rustc-link-lib=stdc++");
-        println!("cargo:rustc-link-lib=c++_shared");
     }
 
     // Link macOS Accelerate framework for matrix calculations
@@ -81,6 +75,8 @@ fn main() {
             config.define("GGML_ACCELERATE", "ON");
             println!("cargo:rustc-link-lib=framework=Accelerate");
         }
+        // qwen3-tts `coreml_code_predictor.mm` (static lib) — rustc must link CoreML on the final binary.
+        println!("cargo:rustc-link-lib=framework=CoreML");
         #[cfg(feature = "metal")]
         {
             println!("cargo:rustc-link-lib=framework=Foundation");
@@ -94,21 +90,27 @@ fn main() {
         if is_android {
             panic!("CUDA is not supported on Android targets");
         }
+        println!("cargo:rerun-if-env-changed=CUDA_PATH");
+        println!("cargo:rerun-if-env-changed=CUDA_ROOT");
+        println!("cargo:rerun-if-env-changed=CUDA_TOOLKIT_ROOT_DIR");
+        println!("cargo:rerun-if-env-changed=CUDA_LIBRARY_PATH");
+
         println!("cargo:rustc-link-lib=cublas");
         println!("cargo:rustc-link-lib=cudart");
         println!("cargo:rustc-link-lib=cublasLt");
         println!("cargo:rustc-link-lib=cuda");
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "windows")] {
-                let cuda_path = PathBuf::from(env::var("CUDA_PATH").unwrap()).join("lib/x64");
-                println!("cargo:rustc-link-search={}", cuda_path.display());
-            } else {
-                println!("cargo:rustc-link-lib=culibos");
-                println!("cargo:rustc-link-search=/usr/local/cuda/lib64");
-                println!("cargo:rustc-link-search=/usr/local/cuda/lib64/stubs");
-                println!("cargo:rustc-link-search=/opt/cuda/lib64");
-                println!("cargo:rustc-link-search=/opt/cuda/lib64/stubs");
-            }
+
+        let cuda_lib_dirs = find_cuda_helper::find_cuda_lib_dirs();
+        if cuda_lib_dirs.is_empty() {
+            panic!(
+                "Could not find CUDA libraries; set CUDA_PATH, CUDA_ROOT, CUDA_TOOLKIT_ROOT_DIR, or CUDA_LIBRARY_PATH"
+            );
+        }
+        for dir in cuda_lib_dirs {
+            println!("cargo:rustc-link-search=native={}", dir.display());
+        }
+        if !is_windows_target {
+            println!("cargo:rustc-link-lib=culibos");
         }
     }
 
@@ -117,22 +119,19 @@ fn main() {
         if is_android {
             panic!("HIPBLAS is not supported on Android targets");
         }
+        if is_windows_target {
+            panic!("Due to a problem with the last revision of the ROCm 5.7 library, it is not possible to compile the library for the windows environment.\nSee https://github.com/ggerganov/ggml.cpp/issues/2202 for more details.");
+        }
         println!("cargo:rustc-link-lib=hipblas");
         println!("cargo:rustc-link-lib=rocblas");
         println!("cargo:rustc-link-lib=amdhip64");
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "windows")] {
-                panic!("Due to a problem with the last revision of the ROCm 5.7 library, it is not possible to compile the library for the windows environment.\nSee https://github.com/ggerganov/ggml.cpp/issues/2202 for more details.")
-            } else {
-                println!("cargo:rerun-if-env-changed=HIP_PATH");
-                let hip_path = match env::var("HIP_PATH") {
-                    Ok(path) => PathBuf::from(path),
-                    Err(_) => PathBuf::from("/opt/rocm"),
-                };
-                let hip_lib_path = hip_path.join("lib");
-                println!("cargo:rustc-link-search={}", hip_lib_path.display());
-            }
-        }
+        println!("cargo:rerun-if-env-changed=HIP_PATH");
+        let hip_path = match env::var("HIP_PATH") {
+            Ok(path) => PathBuf::from(path),
+            Err(_) => PathBuf::from("/opt/rocm"),
+        };
+        let hip_lib_path = hip_path.join("lib");
+        println!("cargo:rustc-link-search=native={}", hip_lib_path.display());
     }
 
     #[cfg(feature = "openmp")]
@@ -146,51 +145,46 @@ fn main() {
         }
     }
 
-    let bindings = bindgen::Builder::default().header("wrapper.h");
+    let mut bindings = bindgen::Builder::default().header("wrapper.h");
 
     #[cfg(feature = "metal")]
-    let bindings = bindings.header(
-        cc_root
-            .join("ggml/include/ggml-metal.h")
-            .display()
-            .to_string(),
-    );
+    {
+        bindings = bindings.header(
+            cc_root
+                .join("ggml/include/ggml-metal.h")
+                .display()
+                .to_string(),
+        );
+    }
 
-    // Configure mtmd feature if enabled
     #[cfg(feature = "mtmd")]
-    let bindings = bindings
-        .header("wrapper_mtmd.h")
-        .allowlist_function("mtmd_.*")
-        .allowlist_type("mtmd_.*")
-        .allowlist_function("clip_.*")
-        .allowlist_type("clip_.*");
+    {
+        bindings = bindings
+            .header("wrapper_mtmd.h")
+            .allowlist_function("mtmd_.*")
+            .allowlist_type("mtmd_.*")
+            .allowlist_function("clip_.*")
+            .allowlist_type("clip_.*");
+    }
 
-    let bindings = bindings
+    bindings = bindings
         .clang_arg(format!("-I{}", cc_root.join("llama.cpp/include/").display()))
         .clang_arg(format!("-I{}", cc_root.join("llama.cpp/tools/mtmd/").display()))
         .clang_arg(format!("-I{}", cc_root.join("models/").display()))
         .clang_arg(format!("-I{}", cc_root.display()))
-        .clang_arg(format!("-I{}", cc_root.join("ggml/include/").display()))
-        // Add Android-specific include paths for bindgen
-        .clang_arg(if is_android {
-            let sysroot = PathBuf::from(
-                env::var("ANDROID_NDK_HOME")
-                    .or_else(|_| env::var("NDK_HOME"))
-                    .expect("ANDROID_NDK_HOME or NDK_HOME must be set"),
-            )
-            .join("toolchains/llvm/prebuilt")
-            .join(if cfg!(target_os = "windows") {
-                "windows-x86_64"
-            } else if cfg!(target_os = "macos") {
-                "darwin-x86_64"
-            } else {
-                "linux-x86_64"
-            })
-            .join("sysroot");
-            format!("--sysroot={}", sysroot.display())
-        } else {
-            "".to_string()
-        })
+        .clang_arg(format!("-I{}", cc_root.join("ggml/include/").display()));
+
+    if is_android {
+        let ndk = PathBuf::from(
+            env::var("ANDROID_NDK_HOME")
+                .or_else(|_| env::var("NDK_HOME"))
+                .expect("ANDROID_NDK_HOME or NDK_HOME must be set"),
+        );
+        let sysroot = ndk_llvm_sysroot(&ndk);
+        bindings = bindings.clang_arg(format!("--sysroot={}", sysroot.display()));
+    }
+
+    let bindings = bindings
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .derive_partialeq(true)
         .allowlist_function("ggml_.*")
@@ -201,6 +195,8 @@ fn main() {
         .allowlist_type("whisper.*")
         .allowlist_function("sense_voice.*")
         .allowlist_type("sense_voice.*")
+        .allowlist_function("qwen3_tts_.*")
+        .allowlist_type("Qwen3Tts.*")
         .prepend_enum_name(false)
         .generate()
         .expect("Failed to generate bindings");
@@ -227,6 +223,22 @@ fn main() {
         "cargo:rerun-if-changed={}",
         cc_root.join("sense-voice.cpp/src").display()
     );
+    println!(
+        "cargo:rerun-if-changed={}",
+        cc_root.join("qwen3-tts.cpp/src").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        cc_root
+            .join("qwen3-tts.cpp/src/qwen3tts_c_api.h")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        cc_root
+            .join("qwen3-tts.cpp/src/qwen3tts_c_api.cpp")
+            .display()
+    );
 
     let bindings_path = out.join("bindings.rs");
     bindings
@@ -243,7 +255,7 @@ fn main() {
         .very_verbose(true)
         .pic(true);
 
-    if cfg!(target_os = "windows") {
+    if target.contains("msvc") {
         config.cxxflag("/utf-8");
     }
 
@@ -270,11 +282,11 @@ fn main() {
                 .expect("ANDROID_NDK_HOME or NDK_HOME must be set");
             let vulkan_path = PathBuf::from(ndk_home).join("sources/third_party/vulkan/src/libs");
             if vulkan_path.exists() {
-                println!("cargo:rustc-link-search={}", vulkan_path.display());
+                println!("cargo:rustc-link-search=native={}", vulkan_path.display());
             }
         } else {
             config.define("GGML_VULKAN", "ON");
-            if cfg!(windows) {
+            if is_windows_target {
                 println!("cargo:rerun-if-env-changed=VULKAN_SDK");
                 println!("cargo:rustc-link-lib=vulkan-1");
                 let vulkan_path = match env::var("VULKAN_SDK") {
@@ -284,8 +296,8 @@ fn main() {
                     ),
                 };
                 let vulkan_lib_path = vulkan_path.join("Lib");
-                println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
-            } else if cfg!(target_os = "macos") {
+                println!("cargo:rustc-link-search=native={}", vulkan_lib_path.display());
+            } else if target.contains("-apple-darwin") {
                 println!("cargo:rerun-if-env-changed=VULKAN_SDK");
                 println!("cargo:rustc-link-lib=vulkan");
                 let vulkan_path = match env::var("VULKAN_SDK") {
@@ -295,7 +307,7 @@ fn main() {
                     ),
                 };
                 let vulkan_lib_path = vulkan_path.join("lib");
-                println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
+                println!("cargo:rustc-link-search=native={}", vulkan_lib_path.display());
             } else {
                 println!("cargo:rustc-link-lib=vulkan");
             }
@@ -321,7 +333,7 @@ fn main() {
         let is_useful_flag =
             key.starts_with("WHISPER_") || key.starts_with("LLAMA_") || key.starts_with("GGML_");
         let is_cmake_flag = key.starts_with("CMAKE_");
-        if is_useful_flag || is_cmake_flag {
+        if (is_useful_flag || is_cmake_flag) && !value.is_empty() {
             config.define(&key, &value);
         }
     }
@@ -337,6 +349,7 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", destination.display());
     println!("cargo:rustc-link-lib=static=whisper");
     println!("cargo:rustc-link-lib=static=sense-voice-core");
+    println!("cargo:rustc-link-lib=static=qwen3tts");
     println!("cargo:rustc-link-lib=static=llama");
     println!("cargo:rustc-link-lib=static=ggml");
     println!("cargo:rustc-link-lib=static=ggml-base");
@@ -369,7 +382,7 @@ fn main() {
             .flag_if_supported("-Wno-cast-qual")
             .pic(true);
 
-        if cfg!(target_os = "windows") {
+        if target.contains("msvc") {
             mtmd_build.flag("/std:c++17");
         }
 
@@ -410,15 +423,49 @@ fn get_cpp_link_stdlib(target: &str) -> Option<&'static str> {
     } else if target.contains("apple") || target.contains("freebsd") || target.contains("openbsd") {
         Some("c++")
     } else if target.contains("android") {
-        Some("c++_shared") // Already correctly set for Android
+        Some("c++_shared")
     } else {
         Some("stdc++")
     }
 }
 
-fn add_link_search_path(dir: &std::path::Path) -> std::io::Result<()> {
+fn ndk_llvm_sysroot(ndk: &Path) -> PathBuf {
+    let prebuilt = ndk.join("toolchains/llvm/prebuilt");
+    let candidates: &[&str] = if cfg!(target_os = "macos") {
+        if cfg!(target_arch = "aarch64") {
+            &["darwin-aarch64", "darwin-x86_64"]
+        } else {
+            &["darwin-x86_64", "darwin-aarch64"]
+        }
+    } else if cfg!(target_os = "linux") {
+        if cfg!(target_arch = "aarch64") {
+            &["linux-aarch64", "linux-x86_64"]
+        } else {
+            &["linux-x86_64", "linux-aarch64"]
+        }
+    } else if cfg!(target_os = "windows") {
+        &["windows-x86_64"]
+    } else {
+        &["linux-x86_64"]
+    };
+
+    for name in candidates {
+        let sysroot = prebuilt.join(name).join("sysroot");
+        if sysroot.is_dir() {
+            return sysroot;
+        }
+    }
+
+    panic!(
+        "could not find NDK LLVM sysroot under {} (tried {:?})",
+        prebuilt.display(),
+        candidates
+    );
+}
+
+fn add_link_search_path(dir: &Path) -> std::io::Result<()> {
     if dir.is_dir() {
-        println!("cargo:rustc-link-search={}", dir.display());
+        println!("cargo:rustc-link-search=native={}", dir.display());
         for entry in std::fs::read_dir(dir)? {
             add_link_search_path(&entry?.path())?;
         }
