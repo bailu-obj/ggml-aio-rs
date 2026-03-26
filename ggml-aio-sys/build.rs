@@ -197,6 +197,8 @@ fn main() {
         .allowlist_type("sense_voice.*")
         .allowlist_function("qwen3_tts_.*")
         .allowlist_type("Qwen3Tts.*")
+        .allowlist_function("qwen3_asr_.*")
+        .allowlist_type("Qwen3Asr.*")
         .prepend_enum_name(false)
         .generate()
         .expect("Failed to generate bindings");
@@ -237,6 +239,22 @@ fn main() {
         "cargo:rerun-if-changed={}",
         cc_root
             .join("qwen3-tts.cpp/src/qwen3tts_c_api.cpp")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        cc_root.join("qwen3-asr.cpp/src").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        cc_root
+            .join("qwen3-asr.cpp/src/qwen3asr_c_api.h")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        cc_root
+            .join("qwen3-asr.cpp/src/qwen3asr_c_api.cpp")
             .display()
     );
 
@@ -350,6 +368,7 @@ fn main() {
     println!("cargo:rustc-link-lib=static=whisper");
     println!("cargo:rustc-link-lib=static=sense-voice-core");
     println!("cargo:rustc-link-lib=static=qwen3tts");
+    println!("cargo:rustc-link-lib=static=qwen3asr");
     println!("cargo:rustc-link-lib=static=llama");
     println!("cargo:rustc-link-lib=static=ggml");
     println!("cargo:rustc-link-lib=static=ggml-base");

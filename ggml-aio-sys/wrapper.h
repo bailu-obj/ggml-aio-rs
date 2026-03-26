@@ -2,4 +2,5 @@
 #include "whisper.cpp/include/whisper.h"
 #include "sense-voice.cpp/include/sense-voice.h"
 #include "qwen3-tts.cpp/src/qwen3tts_c_api.h"
+#include "qwen3-asr.cpp/src/qwen3asr_c_api.h"
 #include "ggml/include/ggml.h"

@@ -311,6 +311,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "qwen3-asr-cpp-rs"
+version = "0.1.0"
+dependencies = [
+ "ggml-aio-sys",
+ "thiserror",
+]
+
+[[package]]
 name = "qwen3-tts-cpp-rs"
 version = "0.1.0"
 dependencies = [

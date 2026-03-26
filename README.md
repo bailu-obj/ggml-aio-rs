@@ -13,7 +13,9 @@ ggml-aio-rs/
 │   └── cc/                    # CMake project (subtrees: ggml, llama.cpp, whisper.cpp, sense-voice.cpp)
 ├── llama-cpp-rs/              # Safe-ish wrappers for llama.cpp (crate: llama_cpp_rs)
 ├── whisper-cpp-rs/            # whisper.cpp bindings (package name: whisper-cpp-ggml, crate: whisper_cpp_ggml)
-└── sense-voice-cpp-rs/        # sense-voice.cpp bindings (crate: sense_voice_cpp_rs)
+├── sense-voice-cpp-rs/        # sense-voice.cpp bindings (crate: sense_voice_cpp_rs)
+├── qwen3-tts-cpp-rs/          # qwen3-tts.cpp bindings (crate: qwen3_tts_cpp_rs)
+└── qwen3-asr-cpp-rs/          # qwen3-asr.cpp bindings (crate: qwen3_asr_cpp_rs)
 ```
 
 ```mermaid
@@ -47,6 +49,8 @@ flowchart TB
 | `llama-cpp-rs` | `llama_cpp_rs` | `LlamaBackend`, `LlamaModel`, `LlamaContext`, batches, sampling, optional `mtmd`. |
 | `whisper-cpp-rs` (`whisper-cpp-ggml`) | `whisper_cpp_ggml` | `WhisperContext`, `WhisperState`, params, audio helpers. |
 | `sense-voice-cpp-rs` | `sense_voice_cpp_rs` | `SenseVoiceContext`, decode params / builder. |
+| `qwen3-tts-cpp-rs` | `qwen3_tts_cpp_rs` | `Qwen3Tts` wrapper + synthesize helpers. |
+| `qwen3-asr-cpp-rs` | `qwen3_asr_cpp_rs` | `Qwen3Asr` wrapper + file transcription helper. |
 
 ## Build prerequisites
 
@@ -80,6 +84,8 @@ llama_cpp_rs = { path = "../ggml-aio-rs/llama-cpp-rs" }
 # or
 whisper_cpp_ggml = { path = "../ggml-aio-rs/whisper-cpp-rs", package = "whisper-cpp-ggml" }
 sense_voice_cpp_rs = { path = "../ggml-aio-rs/sense-voice-cpp-rs" }
+qwen3_tts_cpp_rs = { path = "../ggml-aio-rs/qwen3-tts-cpp-rs", package = "qwen3-tts-cpp-rs" }
+qwen3_asr_cpp_rs = { path = "../ggml-aio-rs/qwen3-asr-cpp-rs", package = "qwen3-asr-cpp-rs" }
 ```
 
 Enable GPU features explicitly, e.g. `llama_cpp_rs = { path = "...", features = ["cuda"] }`.
@@ -133,4 +139,17 @@ let ctx = SenseVoiceContext::new_with_params(
 )?;
 let params = SenseVoiceFullParams::default_params(SenseVoiceDecodingStrategy::SamplingGreedy);
 // pass audio + params into the C API via the crate's transcribe helpers
+```
+
+### Qwen3 ASR (`qwen3_asr_cpp_rs`)
+
+```rust
+use qwen3_asr_cpp_rs::{Qwen3Asr, Qwen3AsrParams};
+
+let mut asr = Qwen3Asr::new("qwen3-asr-0.6b-f16.gguf")?;
+let result = asr.transcribe_file(
+    "audio.wav",
+    &Qwen3AsrParams::default().n_threads(4).max_tokens(1024),
+)?;
+println!("{}", result.text);
 ```

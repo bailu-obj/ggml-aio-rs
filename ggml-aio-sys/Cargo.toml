@@ -47,6 +47,12 @@ include = [
     "cc/qwen3-tts.cpp/src/*.cpp",
     "cc/qwen3-tts.cpp/src/*.mm",
 
+    # qwen3-asr.cpp (C API + sources; vendored from predict-woo/qwen3-asr.cpp)
+    "cc/qwen3-asr.cpp/include/*.h",
+    "cc/qwen3-asr.cpp/src/*.h",
+    "cc/qwen3-asr.cpp/src/*.cpp",
+    "cc/qwen3-asr.cpp/assets/*",
+
     # CMake infrastructure
     "cc/**/CMakeLists.txt",
     "cc/**/cmake/**/*.cmake",

@@ -13,6 +13,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/whisper.cpp)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/sense-voice.cpp)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/qwen3-tts.cpp)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/qwen3-asr.cpp)
 
 # todo
 # add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/stable-diffusion.cpp)
