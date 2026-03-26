@@ -125,8 +125,6 @@ bool TTSTransformer::load_model(const std::string & model_path) {
         return false;
     }
     ggml_backend_dev_t device = ggml_backend_get_device(state_.backend);
-    const char * device_name = device ? ggml_backend_dev_name(device) : "Unknown";
-    fprintf(stderr, "  TTSTransformer backend: %s\n", device_name);
 
     if (device && ggml_backend_dev_type(device) != GGML_BACKEND_DEVICE_TYPE_CPU) {
         state_.backend_cpu = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
@@ -175,9 +173,7 @@ bool TTSTransformer::try_init_coreml_code_predictor(const std::string & model_pa
     }
 
 #if !defined(__APPLE__)
-    if (use_coreml_env && use_coreml_env[0] != '\0') {
-        fprintf(stderr, "  CoreML code predictor requested but this build is not on Apple platform\n");
-    }
+    (void)use_coreml_env;
     return true;
 #else
     std::string coreml_path;
@@ -195,16 +191,12 @@ bool TTSTransformer::try_init_coreml_code_predictor(const std::string & model_pa
             error_msg_ = "CoreML code predictor load failed in strict mode: " + coreml_code_predictor_.get_error();
             return false;
         } else {
-            fprintf(stderr, "  CoreML code predictor load failed: %s\n",
-                    coreml_code_predictor_.get_error().c_str());
-            fprintf(stderr, "  Falling back to GGML code predictor\n");
             return true;
         }
     }
 
     use_coreml_code_predictor_ = true;
     coreml_code_predictor_path_ = coreml_path;
-    fprintf(stderr, "  CoreML code predictor enabled: %s\n", coreml_code_predictor_path_.c_str());
     return true;
 #endif
 }
@@ -1856,35 +1848,14 @@ bool TTSTransformer::forward_prefill(const float * prefill_embd, int32_t n_token
         return false;
     }
     
-#ifdef QWEN3_TTS_TIMING
-    using clk = std::chrono::high_resolution_clock;
-    auto t0 = clk::now(), t1 = t0;
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-    t0 = clk::now();
-#endif
     struct ggml_cgraph * gf = build_prefill_forward_graph(n_tokens, n_past);
-#ifdef QWEN3_TTS_TIMING
-    t1 = clk::now();
-    if (timing_) timing_->t_prefill_graph_build_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-    t0 = clk::now();
-#endif
     if (!ggml_backend_sched_alloc_graph(state_.sched, gf)) {
         error_msg_ = "Failed to allocate graph";
         return false;
     }
-#ifdef QWEN3_TTS_TIMING
-    t1 = clk::now();
-    if (timing_) timing_->t_prefill_graph_alloc_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-    t0 = clk::now();
-#endif
     struct ggml_tensor * inp_prefill = ggml_graph_get_tensor(gf, "inp_prefill_embd");
     if (inp_prefill) {
         ggml_backend_tensor_set(inp_prefill, prefill_embd, 0,
@@ -1899,23 +1870,12 @@ bool TTSTransformer::forward_prefill(const float * prefill_embd, int32_t n_token
         }
         ggml_backend_tensor_set(inp_pos, positions.data(), 0, n_tokens * sizeof(int32_t));
     }
-#ifdef QWEN3_TTS_TIMING
-    t1 = clk::now();
-    if (timing_) timing_->t_prefill_data_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-    t0 = clk::now();
-#endif
     if (ggml_backend_sched_graph_compute(state_.sched, gf) != GGML_STATUS_SUCCESS) {
         error_msg_ = "Failed to compute graph";
         ggml_backend_sched_reset(state_.sched);
         return false;
     }
-#ifdef QWEN3_TTS_TIMING
-    t1 = clk::now();
-    if (timing_) timing_->t_prefill_compute_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
     
     struct ggml_tensor * hidden = ggml_graph_get_tensor(gf, "hidden_states");
     if (!hidden) {
@@ -1924,9 +1884,6 @@ bool TTSTransformer::forward_prefill(const float * prefill_embd, int32_t n_token
         return false;
     }
 
-#ifdef QWEN3_TTS_TIMING
-    t0 = clk::now();
-#endif
     output.resize(n_tokens * model_.config.hidden_size);
     ggml_backend_tensor_get(hidden, output.data(), 0, output.size() * sizeof(float));
     
@@ -1952,10 +1909,6 @@ bool TTSTransformer::forward_prefill(const float * prefill_embd, int32_t n_token
     state_.cache.n_used = n_past + n_tokens;
     
     ggml_backend_sched_reset(state_.sched);
-#ifdef QWEN3_TTS_TIMING
-    t1 = clk::now();
-    if (timing_) timing_->t_prefill_data_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
     
     return true;
 }
@@ -2014,35 +1967,14 @@ bool TTSTransformer::forward_step(const float * step_embd, int32_t n_past,
         return false;
     }
     
-#ifdef QWEN3_TTS_TIMING
-    using clk = std::chrono::high_resolution_clock;
-    auto t0 = clk::now(), t1 = t0;
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-    t0 = clk::now();
-#endif
     struct ggml_cgraph * gf = build_step_graph(n_past);
-#ifdef QWEN3_TTS_TIMING
-    t1 = clk::now();
-    if (timing_) timing_->t_talker_graph_build_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-    t0 = clk::now();
-#endif
     if (!ggml_backend_sched_alloc_graph(state_.sched, gf)) {
         error_msg_ = "Failed to allocate graph";
         return false;
     }
-#ifdef QWEN3_TTS_TIMING
-    t1 = clk::now();
-    if (timing_) timing_->t_talker_graph_alloc_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-    t0 = clk::now();
-#endif
     struct ggml_tensor * inp_step = ggml_graph_get_tensor(gf, "inp_step_embd");
     if (inp_step) {
         ggml_backend_tensor_set(inp_step, step_embd, 0,
@@ -2054,29 +1986,15 @@ bool TTSTransformer::forward_step(const float * step_embd, int32_t n_past,
         int32_t pos = n_past;
         ggml_backend_tensor_set(inp_pos, &pos, 0, sizeof(int32_t));
     }
-#ifdef QWEN3_TTS_TIMING
-    t1 = clk::now();
-    if (timing_) timing_->t_talker_data_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-    t0 = clk::now();
-#endif
     if (ggml_backend_sched_graph_compute(state_.sched, gf) != GGML_STATUS_SUCCESS) {
         error_msg_ = "Failed to compute graph";
         ggml_backend_sched_reset(state_.sched);
         return false;
     }
-#ifdef QWEN3_TTS_TIMING
-    t1 = clk::now();
-    if (timing_) timing_->t_talker_compute_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
     
     struct ggml_tensor * hidden = ggml_graph_get_tensor(gf, "hidden_states");
 
-#ifdef QWEN3_TTS_TIMING
-    t0 = clk::now();
-#endif
     if (hidden) {
         last_hidden_.resize(model_.config.hidden_size);
         ggml_backend_tensor_get(hidden, last_hidden_.data(), 0, 
@@ -2099,10 +2017,6 @@ bool TTSTransformer::forward_step(const float * step_embd, int32_t n_past,
     state_.cache.n_used = n_past + 1;
     
     ggml_backend_sched_reset(state_.sched);
-#ifdef QWEN3_TTS_TIMING
-    t1 = clk::now();
-    if (timing_) timing_->t_talker_data_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
     
     return true;
 }
@@ -2209,10 +2123,6 @@ bool TTSTransformer::predict_codes_autoregressive_coreml(const float * hidden,
     std::vector<float> code_probs(cfg.code_pred_vocab_size);
     std::vector<float> seq_embd((size_t)16 * cfg.hidden_size, 0.0f);
 
-#ifdef QWEN3_TTS_TIMING
-    using clk = std::chrono::high_resolution_clock;
-    auto t0 = clk::now(), t1 = t0;
-#endif
 
     auto sample_or_argmax = [&](float * logits_ptr, int32_t vocab_size) -> int32_t {
         if (temperature <= 0.0f) {
@@ -2260,10 +2170,6 @@ bool TTSTransformer::predict_codes_autoregressive_coreml(const float * hidden,
         return false;
     }
 
-#ifdef QWEN3_TTS_TIMING
-    t1 = clk::now();
-    if (timing_) timing_->t_code_pred_init_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
     for (int32_t step = 0; step < n_steps; ++step) {
         if (step > 0) {
@@ -2273,19 +2179,10 @@ bool TTSTransformer::predict_codes_autoregressive_coreml(const float * hidden,
             }
         }
 
-#ifdef QWEN3_TTS_TIMING
-        t0 = clk::now();
-#endif
         if (!coreml_code_predictor_.predict_step(step, seq_embd.data(), step + 2, cfg.hidden_size, logits_data)) {
             error_msg_ = "CoreML predictor step failed: " + coreml_code_predictor_.get_error();
             return false;
         }
-#ifdef QWEN3_TTS_TIMING
-        t1 = clk::now();
-        const double dt_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-        if (timing_) timing_->t_code_pred_compute_ms += dt_ms;
-        if (timing_) timing_->t_code_pred_coreml_ms += dt_ms;
-#endif
 
         if ((int32_t)logits_data.size() != cfg.code_pred_vocab_size) {
             error_msg_ = "CoreML predictor returned unexpected logits size";
@@ -2293,15 +2190,6 @@ bool TTSTransformer::predict_codes_autoregressive_coreml(const float * hidden,
         }
         output[step] = sample_or_argmax(logits_data.data(), cfg.code_pred_vocab_size);
 
-#ifdef QWEN3_TTS_TIMING
-        if (timing_) {
-            if (step == 0) {
-                timing_->t_code_pred_prefill_ms += dt_ms;
-            } else {
-                timing_->t_code_pred_steps_ms += dt_ms;
-            }
-        }
-#endif
     }
 
     return true;
@@ -2317,10 +2205,6 @@ bool TTSTransformer::predict_codes_autoregressive(const float * hidden, int32_t 
     
     const auto & cfg = model_.config;
 
-#ifdef QWEN3_TTS_TIMING
-    using clk = std::chrono::high_resolution_clock;
-    auto t0 = clk::now(), t1 = t0;
-#endif
 
     if (use_coreml_code_predictor_ && coreml_code_predictor_.is_loaded()) {
         if (predict_codes_autoregressive_coreml(hidden, codebook_0_token, output, temperature, top_k)) {
@@ -2329,7 +2213,6 @@ bool TTSTransformer::predict_codes_autoregressive(const float * hidden, int32_t 
         if (skip_ggml_code_pred_layers_) {
             return false;
         }
-        fprintf(stderr, "  CoreML code predictor failed, falling back to GGML: %s\n", error_msg_.c_str());
         use_coreml_code_predictor_ = false;
     }
     
@@ -2390,41 +2273,17 @@ bool TTSTransformer::predict_codes_autoregressive(const float * hidden, int32_t 
     if (!lookup_single_embedding_row(model_.codec_embd, codebook_0_token, cb0_embd.data())) {
         return false;
     }
-#ifdef QWEN3_TTS_TIMING
-    t1 = clk::now();
-    if (timing_) timing_->t_code_pred_init_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
     
     // Prefill with 2 tokens [past_hidden, cb0_embd]
     {
-#ifdef QWEN3_TTS_TIMING
-        auto t_pf_start = clk::now();
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-        t0 = clk::now();
-#endif
         struct ggml_cgraph * gf = build_code_pred_prefill_graph();
-#ifdef QWEN3_TTS_TIMING
-        t1 = clk::now();
-        if (timing_) timing_->t_code_pred_graph_build_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-        t0 = clk::now();
-#endif
         if (!ggml_backend_sched_alloc_graph(state_.sched, gf)) {
             error_msg_ = "Failed to allocate code predictor prefill graph";
             return false;
         }
-#ifdef QWEN3_TTS_TIMING
-        t1 = clk::now();
-        if (timing_) timing_->t_code_pred_graph_alloc_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-        t0 = clk::now();
-#endif
         struct ggml_tensor * inp_hidden = ggml_graph_get_tensor(gf, "inp_hidden");
         if (inp_hidden) {
             ggml_backend_tensor_set(inp_hidden, hidden, 0, cfg.hidden_size * sizeof(float));
@@ -2440,23 +2299,12 @@ bool TTSTransformer::predict_codes_autoregressive(const float * hidden, int32_t 
             int32_t positions[2] = {0, 1};
             ggml_backend_tensor_set(inp_pos, positions, 0, 2 * sizeof(int32_t));
         }
-#ifdef QWEN3_TTS_TIMING
-        t1 = clk::now();
-        if (timing_) timing_->t_code_pred_data_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-        t0 = clk::now();
-#endif
         if (ggml_backend_sched_graph_compute(state_.sched, gf) != GGML_STATUS_SUCCESS) {
             error_msg_ = "Failed to compute code predictor prefill graph";
             ggml_backend_sched_reset(state_.sched);
             return false;
         }
-#ifdef QWEN3_TTS_TIMING
-        t1 = clk::now();
-        if (timing_) timing_->t_code_pred_compute_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
         
         struct ggml_tensor * logits = ggml_graph_get_tensor(gf, "logits");
         if (!logits) {
@@ -2465,53 +2313,25 @@ bool TTSTransformer::predict_codes_autoregressive(const float * hidden, int32_t 
             return false;
         }
 
-#ifdef QWEN3_TTS_TIMING
-        t0 = clk::now();
-#endif
         ggml_backend_tensor_get(logits, logits_data.data(), 0, 
                                  cfg.code_pred_vocab_size * sizeof(float));
         
         output[0] = sample_or_argmax(logits_data.data(), cfg.code_pred_vocab_size);
         
         ggml_backend_sched_reset(state_.sched);
-#ifdef QWEN3_TTS_TIMING
-        t1 = clk::now();
-        if (timing_) timing_->t_code_pred_data_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-        if (timing_) timing_->t_code_pred_prefill_ms += std::chrono::duration<double, std::milli>(t1 - t_pf_start).count();
-#endif
     }
     
     // Generate 14 more tokens autoregressively
-#ifdef QWEN3_TTS_TIMING
-    auto t_steps_start = clk::now();
-#endif
     for (int step = 1; step < 15; ++step) {
         int32_t n_past = step + 1;
 
-#ifdef QWEN3_TTS_TIMING
-        t0 = clk::now();
-#endif
         struct ggml_cgraph * gf = build_code_pred_step_graph(n_past, step);
-#ifdef QWEN3_TTS_TIMING
-        t1 = clk::now();
-        if (timing_) timing_->t_code_pred_graph_build_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-        t0 = clk::now();
-#endif
         if (!ggml_backend_sched_alloc_graph(state_.sched, gf)) {
             error_msg_ = "Failed to allocate code predictor step graph";
             return false;
         }
-#ifdef QWEN3_TTS_TIMING
-        t1 = clk::now();
-        if (timing_) timing_->t_code_pred_graph_alloc_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-        t0 = clk::now();
-#endif
         struct ggml_tensor * inp_hidden = ggml_graph_get_tensor(gf, "inp_hidden");
         if (inp_hidden) {
             ggml_backend_tensor_set(inp_hidden, hidden, 0, cfg.hidden_size * sizeof(float));
@@ -2528,23 +2348,12 @@ bool TTSTransformer::predict_codes_autoregressive(const float * hidden, int32_t 
             int32_t pos = n_past;
             ggml_backend_tensor_set(inp_pos, &pos, 0, sizeof(int32_t));
         }
-#ifdef QWEN3_TTS_TIMING
-        t1 = clk::now();
-        if (timing_) timing_->t_code_pred_data_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
-#ifdef QWEN3_TTS_TIMING
-        t0 = clk::now();
-#endif
         if (ggml_backend_sched_graph_compute(state_.sched, gf) != GGML_STATUS_SUCCESS) {
             error_msg_ = "Failed to compute code predictor step graph";
             ggml_backend_sched_reset(state_.sched);
             return false;
         }
-#ifdef QWEN3_TTS_TIMING
-        t1 = clk::now();
-        if (timing_) timing_->t_code_pred_compute_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
         
         struct ggml_tensor * logits = ggml_graph_get_tensor(gf, "logits");
         if (!logits) {
@@ -2553,23 +2362,13 @@ bool TTSTransformer::predict_codes_autoregressive(const float * hidden, int32_t 
             return false;
         }
 
-#ifdef QWEN3_TTS_TIMING
-        t0 = clk::now();
-#endif
         ggml_backend_tensor_get(logits, logits_data.data(), 0, 
                                  cfg.code_pred_vocab_size * sizeof(float));
         
         output[step] = sample_or_argmax(logits_data.data(), cfg.code_pred_vocab_size);
         
         ggml_backend_sched_reset(state_.sched);
-#ifdef QWEN3_TTS_TIMING
-        t1 = clk::now();
-        if (timing_) timing_->t_code_pred_data_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
     }
-#ifdef QWEN3_TTS_TIMING
-    if (timing_) timing_->t_code_pred_steps_ms += std::chrono::duration<double, std::milli>(clk::now() - t_steps_start).count();
-#endif
     
     return true;
 }
@@ -2581,14 +2380,6 @@ bool TTSTransformer::generate(const int32_t * text_tokens, int32_t n_tokens,
                                float repetition_penalty,
                                float temperature,
                                int32_t top_k) {
-#ifdef QWEN3_TTS_TIMING
-    using clk = std::chrono::high_resolution_clock;
-    tts_timing timing = {};
-    auto t_gen_start = clk::now();
-    auto t0 = t_gen_start, t1 = t_gen_start;
-    timing_ = &timing;
-#endif
-
     if (!model_.ctx) {
         error_msg_ = "Model not loaded";
         return false;
@@ -2612,17 +2403,10 @@ bool TTSTransformer::generate(const int32_t * text_tokens, int32_t n_tokens,
     std::vector<float> trailing_text_hidden;
     std::vector<float> tts_pad_embed;
 
-#ifdef QWEN3_TTS_TIMING
-    t0 = clk::now();
-#endif
     if (!build_prefill_graph(text_tokens, n_tokens, speaker_embd, language_id,
                              prefill_embd, trailing_text_hidden, tts_pad_embed)) {
         return false;
     }
-#ifdef QWEN3_TTS_TIMING
-    t1 = clk::now();
-    timing.t_prefill_build_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
     const int32_t prefill_len = (int32_t)(prefill_embd.size() / cfg.hidden_size);
     const int32_t trailing_len = (int32_t)(trailing_text_hidden.size() / cfg.hidden_size);
@@ -2638,16 +2422,9 @@ bool TTSTransformer::generate(const int32_t * text_tokens, int32_t n_tokens,
     std::vector<float> hidden_out;
     std::vector<float> logits;
 
-#ifdef QWEN3_TTS_TIMING
-    t0 = clk::now();
-#endif
     if (!forward_prefill(prefill_embd.data(), prefill_len, 0, hidden_out, &logits)) {
         return false;
     }
-#ifdef QWEN3_TTS_TIMING
-    t1 = clk::now();
-    timing.t_prefill_forward_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
     
     output.clear();
     output.reserve(max_len * cfg.n_codebooks);
@@ -2660,7 +2437,9 @@ bool TTSTransformer::generate(const int32_t * text_tokens, int32_t n_tokens,
     std::vector<float> probs(cfg.codec_vocab_size);
     std::vector<float> step_embd(cfg.hidden_size, 0.0f);
     std::vector<float> embd_row(cfg.hidden_size);
-    
+    std::vector<int32_t> codes_1_15;
+    codes_1_15.reserve((size_t)cfg.n_codebooks - 1);
+
     for (int frame = 0; frame < max_len; ++frame) {
         // Suppress tokens in [codec_vocab_size - 1024, codec_vocab_size), except codec_eos_id
         for (int32_t i = suppress_start; i < cfg.codec_vocab_size; ++i) {
@@ -2727,18 +2506,10 @@ bool TTSTransformer::generate(const int32_t * text_tokens, int32_t n_tokens,
         
         frame_codes[0] = next_token;
         generated_cb0_tokens.insert(next_token);
-        
-#ifdef QWEN3_TTS_TIMING
-        t0 = clk::now();
-#endif
-        std::vector<int32_t> codes_1_15;
+
         if (!predict_codes_autoregressive(last_hidden_.data(), frame_codes[0], codes_1_15, temperature, top_k)) {
             return false;
         }
-#ifdef QWEN3_TTS_TIMING
-        t1 = clk::now();
-        timing.t_code_pred_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
         
         for (int cb = 1; cb < cfg.n_codebooks; ++cb) {
             frame_codes[cb] = codes_1_15[cb - 1];
@@ -2748,19 +2519,12 @@ bool TTSTransformer::generate(const int32_t * text_tokens, int32_t n_tokens,
             output.push_back(frame_codes[cb]);
         }
 
-#ifdef QWEN3_TTS_TIMING
-        timing.n_frames = frame + 1;
-#endif
-
         if (frame + 1 >= max_len) {
             break;
         }
 
         std::fill(step_embd.begin(), step_embd.end(), 0.0f);
 
-#ifdef QWEN3_TTS_TIMING
-        t0 = clk::now();
-#endif
         if (!lookup_single_embedding_row(model_.codec_embd, frame_codes[0], embd_row.data())) {
             return false;
         }
@@ -2777,10 +2541,6 @@ bool TTSTransformer::generate(const int32_t * text_tokens, int32_t n_tokens,
                 step_embd[h] += embd_row[h];
             }
         }
-#ifdef QWEN3_TTS_TIMING
-        t1 = clk::now();
-        timing.t_embed_lookup_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
 
         const float * trailing_row = (frame < trailing_len)
             ? trailing_text_hidden.data() + (size_t)frame * cfg.hidden_size
@@ -2789,63 +2549,12 @@ bool TTSTransformer::generate(const int32_t * text_tokens, int32_t n_tokens,
             step_embd[h] += trailing_row[h];
         }
 
-#ifdef QWEN3_TTS_TIMING
-        t0 = clk::now();
-#endif
         if (!forward_step(step_embd.data(), n_past, logits)) {
             return false;
         }
-#ifdef QWEN3_TTS_TIMING
-        t1 = clk::now();
-        timing.t_talker_forward_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-#endif
         
         n_past++;
     }
-    
-#ifdef QWEN3_TTS_TIMING
-    timing.t_generate_total_ms = std::chrono::duration<double, std::milli>(clk::now() - t_gen_start).count();
-    timing_ = nullptr;
-    const auto & t = timing;
-    int nf = t.n_frames;
-    fprintf(stderr, "\n=== Detailed Generation Timing (%d frames) ===\n", nf);
-    fprintf(stderr, "\n  Prefill:\n");
-    fprintf(stderr, "    Build graph:      %8.1f ms\n", t.t_prefill_build_ms);
-    fprintf(stderr, "    Forward total:    %8.1f ms\n", t.t_prefill_forward_ms);
-    fprintf(stderr, "      Graph build:    %8.1f ms\n", t.t_prefill_graph_build_ms);
-    fprintf(stderr, "      Graph alloc:    %8.1f ms\n", t.t_prefill_graph_alloc_ms);
-    fprintf(stderr, "      Compute:        %8.1f ms\n", t.t_prefill_compute_ms);
-    fprintf(stderr, "      Data I/O:       %8.1f ms\n", t.t_prefill_data_ms);
-    fprintf(stderr, "\n  Talker forward_step (total / per-frame):\n");
-    fprintf(stderr, "    Total:            %8.1f ms   (%.1f ms/frame)\n", t.t_talker_forward_ms, nf > 0 ? t.t_talker_forward_ms / nf : 0.0);
-    fprintf(stderr, "      Graph build:    %8.1f ms   (%.1f ms/frame)\n", t.t_talker_graph_build_ms, nf > 0 ? t.t_talker_graph_build_ms / nf : 0.0);
-    fprintf(stderr, "      Graph alloc:    %8.1f ms   (%.1f ms/frame)\n", t.t_talker_graph_alloc_ms, nf > 0 ? t.t_talker_graph_alloc_ms / nf : 0.0);
-    fprintf(stderr, "      Compute:        %8.1f ms   (%.1f ms/frame)\n", t.t_talker_compute_ms, nf > 0 ? t.t_talker_compute_ms / nf : 0.0);
-    fprintf(stderr, "      Data I/O:       %8.1f ms   (%.1f ms/frame)\n", t.t_talker_data_ms, nf > 0 ? t.t_talker_data_ms / nf : 0.0);
-    fprintf(stderr, "\n  Code predictor (total / per-frame):\n");
-    fprintf(stderr, "    Backend:          %s\n", use_coreml_code_predictor_ ? "CoreML (CPU+NE)" : "GGML");
-    if (use_coreml_code_predictor_ && !coreml_code_predictor_path_.empty()) {
-        fprintf(stderr, "    CoreML model:     %s\n", coreml_code_predictor_path_.c_str());
-    }
-    fprintf(stderr, "    Total:            %8.1f ms   (%.1f ms/frame)\n", t.t_code_pred_ms, nf > 0 ? t.t_code_pred_ms / nf : 0.0);
-    fprintf(stderr, "      Init/KV/embed:  %8.1f ms   (%.1f ms/frame)\n", t.t_code_pred_init_ms, nf > 0 ? t.t_code_pred_init_ms / nf : 0.0);
-    fprintf(stderr, "      Prefill (2tok): %8.1f ms   (%.1f ms/frame)\n", t.t_code_pred_prefill_ms, nf > 0 ? t.t_code_pred_prefill_ms / nf : 0.0);
-    fprintf(stderr, "      Steps (14):     %8.1f ms   (%.1f ms/frame)\n", t.t_code_pred_steps_ms, nf > 0 ? t.t_code_pred_steps_ms / nf : 0.0);
-    fprintf(stderr, "      Graph build:    %8.1f ms   (%.1f ms/frame)\n", t.t_code_pred_graph_build_ms, nf > 0 ? t.t_code_pred_graph_build_ms / nf : 0.0);
-    fprintf(stderr, "      Graph alloc:    %8.1f ms   (%.1f ms/frame)\n", t.t_code_pred_graph_alloc_ms, nf > 0 ? t.t_code_pred_graph_alloc_ms / nf : 0.0);
-    fprintf(stderr, "      Compute:        %8.1f ms   (%.1f ms/frame)\n", t.t_code_pred_compute_ms, nf > 0 ? t.t_code_pred_compute_ms / nf : 0.0);
-    fprintf(stderr, "      Data I/O:       %8.1f ms   (%.1f ms/frame)\n", t.t_code_pred_data_ms, nf > 0 ? t.t_code_pred_data_ms / nf : 0.0);
-    fprintf(stderr, "      CoreML total:   %8.1f ms   (%.1f ms/frame)\n", t.t_code_pred_coreml_ms, nf > 0 ? t.t_code_pred_coreml_ms / nf : 0.0);
-    fprintf(stderr, "\n  Embed lookups:      %8.1f ms   (%.1f ms/frame)\n", t.t_embed_lookup_ms, nf > 0 ? t.t_embed_lookup_ms / nf : 0.0);
-    double accounted = t.t_prefill_build_ms + t.t_prefill_forward_ms + t.t_talker_forward_ms + t.t_code_pred_ms + t.t_embed_lookup_ms;
-    fprintf(stderr, "  Other/overhead:     %8.1f ms\n", t.t_generate_total_ms - accounted);
-    fprintf(stderr, "  ─────────────────────────────────────────\n");
-    fprintf(stderr, "  Total generate:     %8.1f ms\n", t.t_generate_total_ms);
-    if (nf > 0) {
-        fprintf(stderr, "  Throughput:         %8.1f ms/frame (%.1f frames/s)\n",
-                t.t_generate_total_ms / nf, 1000.0 * nf / t.t_generate_total_ms);
-    }
-#endif
 
     return true;
 }

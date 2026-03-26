@@ -10,47 +10,8 @@
 #include <vector>
 #include <memory>
 #include <random>
-#ifdef QWEN3_TTS_TIMING
-#include <chrono>
-#endif
 
 namespace qwen3_tts {
-
-#ifdef QWEN3_TTS_TIMING
-struct tts_timing {
-    // Prefill phase
-    double t_prefill_build_ms = 0;      // build_prefill_graph (embedding lookups, text projection)
-    double t_prefill_forward_ms = 0;    // forward_prefill total
-    double t_prefill_graph_build_ms = 0;  // build_prefill_forward_graph
-    double t_prefill_graph_alloc_ms = 0;  // sched_alloc_graph
-    double t_prefill_compute_ms = 0;      // sched_graph_compute
-    double t_prefill_data_ms = 0;         // tensor_set + tensor_get + reset
-
-    // Talker forward_step totals (accumulated across all frames)
-    double t_talker_forward_ms = 0;       // total time in forward_step()
-    double t_talker_graph_build_ms = 0;   // build_step_graph
-    double t_talker_graph_alloc_ms = 0;   // sched_alloc_graph
-    double t_talker_compute_ms = 0;       // sched_graph_compute
-    double t_talker_data_ms = 0;          // tensor_set + tensor_get + reset
-
-    // Code predictor totals (accumulated across all frames)
-    double t_code_pred_ms = 0;            // total predict_codes_autoregressive
-    double t_code_pred_init_ms = 0;       // init/clear KV cache + CB0 embed lookup
-    double t_code_pred_prefill_ms = 0;    // code pred prefill (2-token, per frame)
-    double t_code_pred_steps_ms = 0;      // code pred autoregressive steps (14 steps, per frame)
-    double t_code_pred_graph_build_ms = 0;  // graph build (prefill + steps combined)
-    double t_code_pred_graph_alloc_ms = 0;  // sched_alloc_graph
-    double t_code_pred_compute_ms = 0;      // sched_graph_compute
-    double t_code_pred_data_ms = 0;         // tensor_set + tensor_get + reset
-    double t_code_pred_coreml_ms = 0;       // CoreML predictor compute + I/O
-
-    // Embed lookups in generate() loop
-    double t_embed_lookup_ms = 0;
-
-    int32_t n_frames = 0;
-    double t_generate_total_ms = 0;
-};
-#endif
 
 #define QWEN3_TTS_MAX_NODES 16384
 
@@ -338,10 +299,6 @@ private:
     bool use_coreml_code_predictor_ = false;
     std::string coreml_code_predictor_path_;
     bool skip_ggml_code_pred_layers_ = false;
-
-#ifdef QWEN3_TTS_TIMING
-    tts_timing * timing_ = nullptr;
-#endif
 };
 
 // Free model resources

@@ -3,17 +3,122 @@
 
 #include <chrono>
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <cmath>
 #include <fstream>
 #include <ggml-impl.h>
+#include <utility>
 
 namespace qwen3_asr {
 
 static int64_t get_time_ms() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+static std::string trim_copy(const std::string & s) {
+    size_t start = 0;
+    while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) {
+        ++start;
+    }
+    size_t end = s.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1]))) {
+        --end;
+    }
+    return s.substr(start, end - start);
+}
+
+static bool ascii_istarts_with(const std::string & s, const std::string & prefix) {
+    if (s.size() < prefix.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < prefix.size(); ++i) {
+        unsigned char a = static_cast<unsigned char>(s[i]);
+        unsigned char b = static_cast<unsigned char>(prefix[i]);
+        if (std::tolower(a) != std::tolower(b)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static std::pair<std::string, std::string> parse_asr_protocol_output(const std::string & raw_text) {
+    static const std::vector<std::string> kLanguageLabels = {
+        "Cantonese (Hong Kong accent)",
+        "Cantonese (Guangdong accent)",
+        "Minnan language",
+        "Wu language",
+        "Portuguese",
+        "Indonesian",
+        "Vietnamese",
+        "Macedonian",
+        "Cantonese",
+        "Shandong",
+        "Romanian",
+        "Japanese",
+        "Sichuan",
+        "Guizhou",
+        "Jiangxi",
+        "Ningxia",
+        "Shaanxi",
+        "English",
+        "German",
+        "Spanish",
+        "Italian",
+        "Russian",
+        "Swedish",
+        "Finnish",
+        "Filipino",
+        "Persian",
+        "Hungarian",
+        "Chinese",
+        "Arabic",
+        "French",
+        "Korean",
+        "Turkish",
+        "Shanxi",
+        "Dongbei",
+        "Fujian",
+        "Hebei",
+        "Henan",
+        "Hubei",
+        "Hunan",
+        "Yunnan",
+        "Zhejiang",
+        "Anhui",
+        "Gansu",
+        "Tianjin",
+        "Thai",
+        "Hindi",
+        "Malay",
+        "Dutch",
+        "Danish",
+        "Polish",
+        "Czech",
+        "Greek",
+    };
+
+    const std::string s = trim_copy(raw_text);
+    if (!ascii_istarts_with(s, "language ")) {
+        return {"", s};
+    }
+
+    std::string rest = s.substr(std::strlen("language "));
+    if (ascii_istarts_with(rest, "none")) {
+        return {"", trim_copy(rest.substr(4))};
+    }
+
+    for (const auto & label : kLanguageLabels) {
+        if (rest.rfind(label, 0) == 0) {
+            return {label, trim_copy(rest.substr(label.size()))};
+        }
+    }
+
+    // Keep raw output when the metadata prefix is present but we cannot safely
+    // identify the language label yet.
+    return {"", s};
 }
 
 Qwen3ASR::Qwen3ASR() = default;
@@ -131,9 +236,10 @@ transcribe_result Qwen3ASR::transcribe_internal(const float * samples, int n_sam
     result.t_decode_ms = get_time_ms() - t_decode_start;
     
     result.tokens = output_tokens;
-    std::vector text_tokens(output_tokens.begin() + 2, output_tokens.end());  // remove language token
-    result.text = decoder_.decode_tokens(text_tokens);
-    result.language = decoder_.decode_token(output_tokens[1]);
+    const std::string raw_text = decoder_.decode_tokens(output_tokens);
+    const auto parsed = parse_asr_protocol_output(raw_text);
+    result.language = parsed.first;
+    result.text = parsed.second;
     result.success = true;
     
     result.t_total_ms = get_time_ms() - t_total_start;
