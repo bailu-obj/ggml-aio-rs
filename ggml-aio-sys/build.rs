@@ -75,11 +75,12 @@ fn main() {
             config.define("GGML_ACCELERATE", "ON");
             println!("cargo:rustc-link-lib=framework=Accelerate");
         }
-        // qwen3-tts `coreml_code_predictor.mm` (static lib) — rustc must link CoreML on the final binary.
+        // qwen3-tts `coreml_code_predictor.mm` (static lib) — rustc must link CoreML + Foundation on the final binary.
+        // Foundation is required for ObjC symbols in that .mm (e.g. NSConstantIntegerNumber), not only when `metal` is on.
         println!("cargo:rustc-link-lib=framework=CoreML");
+        println!("cargo:rustc-link-lib=framework=Foundation");
         #[cfg(feature = "metal")]
         {
-            println!("cargo:rustc-link-lib=framework=Foundation");
             println!("cargo:rustc-link-lib=framework=Metal");
             println!("cargo:rustc-link-lib=framework=MetalKit");
         }
