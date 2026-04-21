@@ -184,9 +184,18 @@ impl MtmdContext {
     }
 
     /// Check whether non-causal attention mask is needed before `llama_decode`.
+    ///
+    /// Pass the chunk you are about to decode when it may be audio: the projector
+    /// type (vision vs audio) affects the result. Pass `None` to use the vision
+    /// projector type only (same as a null chunk in the C API).
     #[must_use]
-    pub fn decode_use_non_causal(&self) -> bool {
-        unsafe { ggml_aio_sys::mtmd_decode_use_non_causal(self.context.as_ptr()) }
+    pub fn decode_use_non_causal(&self, chunk: Option<&MtmdInputChunk>) -> bool {
+        unsafe {
+            ggml_aio_sys::mtmd_decode_use_non_causal(
+                self.context.as_ptr(),
+                chunk.map_or(std::ptr::null(), |c| c.chunk.as_ptr()),
+            )
+        }
     }
 
     /// Check whether the current model uses M-RoPE for `llama_decode`.
