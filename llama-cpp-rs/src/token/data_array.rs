@@ -104,9 +104,9 @@ impl LlamaTokenDataArray {
         if !ptr::eq(c_llama_token_data_array.data, data) {
             unsafe {
                 ptr::copy(
-                c_llama_token_data_array.data,
-                data,
-                c_llama_token_data_array.size,
+                    c_llama_token_data_array.data,
+                    data,
+                    c_llama_token_data_array.size,
                 );
             }
         }

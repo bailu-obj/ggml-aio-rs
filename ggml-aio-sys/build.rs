@@ -121,7 +121,9 @@ fn main() {
             panic!("HIPBLAS is not supported on Android targets");
         }
         if is_windows_target {
-            panic!("Due to a problem with the last revision of the ROCm 5.7 library, it is not possible to compile the library for the windows environment.\nSee https://github.com/ggerganov/ggml.cpp/issues/2202 for more details.");
+            panic!(
+                "Due to a problem with the last revision of the ROCm 5.7 library, it is not possible to compile the library for the windows environment.\nSee https://github.com/ggerganov/ggml.cpp/issues/2202 for more details."
+            );
         }
         println!("cargo:rustc-link-lib=hipblas");
         println!("cargo:rustc-link-lib=rocblas");
@@ -169,8 +171,14 @@ fn main() {
     }
 
     bindings = bindings
-        .clang_arg(format!("-I{}", cc_root.join("llama.cpp/include/").display()))
-        .clang_arg(format!("-I{}", cc_root.join("llama.cpp/tools/mtmd/").display()))
+        .clang_arg(format!(
+            "-I{}",
+            cc_root.join("llama.cpp/include/").display()
+        ))
+        .clang_arg(format!(
+            "-I{}",
+            cc_root.join("llama.cpp/tools/mtmd/").display()
+        ))
         .clang_arg(format!("-I{}", cc_root.join("models/").display()))
         .clang_arg(format!("-I{}", cc_root.display()))
         .clang_arg(format!("-I{}", cc_root.join("ggml/include/").display()));
@@ -232,9 +240,7 @@ fn main() {
     );
     println!(
         "cargo:rerun-if-changed={}",
-        cc_root
-            .join("qwen3-tts.cpp/src/qwen3tts_c_api.h")
-            .display()
+        cc_root.join("qwen3-tts.cpp/src/qwen3tts_c_api.h").display()
     );
     println!(
         "cargo:rerun-if-changed={}",
@@ -248,9 +254,7 @@ fn main() {
     );
     println!(
         "cargo:rerun-if-changed={}",
-        cc_root
-            .join("qwen3-asr.cpp/src/qwen3asr_c_api.h")
-            .display()
+        cc_root.join("qwen3-asr.cpp/src/qwen3asr_c_api.h").display()
     );
     println!(
         "cargo:rerun-if-changed={}",
@@ -315,7 +319,10 @@ fn main() {
                     ),
                 };
                 let vulkan_lib_path = vulkan_path.join("Lib");
-                println!("cargo:rustc-link-search=native={}", vulkan_lib_path.display());
+                println!(
+                    "cargo:rustc-link-search=native={}",
+                    vulkan_lib_path.display()
+                );
             } else if target.contains("-apple-darwin") {
                 println!("cargo:rerun-if-env-changed=VULKAN_SDK");
                 println!("cargo:rustc-link-lib=vulkan");
@@ -326,7 +333,10 @@ fn main() {
                     ),
                 };
                 let vulkan_lib_path = vulkan_path.join("lib");
-                println!("cargo:rustc-link-search=native={}", vulkan_lib_path.display());
+                println!(
+                    "cargo:rustc-link-search=native={}",
+                    vulkan_lib_path.display()
+                );
             } else {
                 println!("cargo:rustc-link-lib=vulkan");
             }

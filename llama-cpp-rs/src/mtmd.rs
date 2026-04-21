@@ -308,9 +308,8 @@ impl MtmdContext {
     ///
     /// Returns `MtmdEncodeError::EncodeFailure` if encoding fails.
     pub fn encode_chunk(&self, chunk: &MtmdInputChunk) -> Result<(), MtmdEncodeError> {
-        let result = unsafe {
-            ggml_aio_sys::mtmd_encode_chunk(self.context.as_ptr(), chunk.chunk.as_ptr())
-        };
+        let result =
+            unsafe { ggml_aio_sys::mtmd_encode_chunk(self.context.as_ptr(), chunk.chunk.as_ptr()) };
 
         if result == 0 {
             Ok(())
@@ -624,8 +623,7 @@ impl MtmdInputChunks {
             return None;
         }
 
-        let chunk_ptr =
-            unsafe { ggml_aio_sys::mtmd_input_chunks_get(self.chunks.as_ptr(), index) };
+        let chunk_ptr = unsafe { ggml_aio_sys::mtmd_input_chunks_get(self.chunks.as_ptr(), index) };
 
         // Note: We don't own this chunk, it's owned by the chunks collection
         NonNull::new(chunk_ptr.cast_mut()).map(|ptr| MtmdInputChunk {
@@ -750,10 +748,7 @@ impl MtmdInputChunk {
 
         let mut n_tokens = 0usize;
         let tokens_ptr = unsafe {
-            ggml_aio_sys::mtmd_input_chunk_get_tokens_text(
-                self.chunk.as_ptr(),
-                &raw mut n_tokens,
-            )
+            ggml_aio_sys::mtmd_input_chunk_get_tokens_text(self.chunk.as_ptr(), &raw mut n_tokens)
         };
 
         if tokens_ptr.is_null() || n_tokens == 0 {

@@ -22,9 +22,8 @@ use hound::{SampleFormat, WavSpec, WavWriter};
 use qwen3_tts_cpp_rs::{Qwen3Tts, Qwen3TtsParams};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let models = env::var("QWEN3_TTS_MODELS").unwrap_or_else(|_| {
-        "/Users/neko/projects/qwen3-tts.cpp/models".to_string()
-    });
+    let models = env::var("QWEN3_TTS_MODELS")
+        .unwrap_or_else(|_| "/Users/neko/projects/qwen3-tts.cpp/models".to_string());
     let out_path = env::var("QWEN3_TTS_OUT").unwrap_or_else(|_| "qwen3_tts_out.wav".to_string());
     let text = env::var("QWEN3_TTS_TEXT")
         .unwrap_or_else(|_| "Hello from qwen3-tts via ggml-aio-rs.".to_string());
@@ -54,6 +53,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     writer.finalize()?;
 
-    println!("Wrote {} samples at {} Hz to {}", audio.samples.len(), audio.sample_rate, out_path);
+    println!(
+        "Wrote {} samples at {} Hz to {}",
+        audio.samples.len(),
+        audio.sample_rate,
+        out_path
+    );
     Ok(())
 }

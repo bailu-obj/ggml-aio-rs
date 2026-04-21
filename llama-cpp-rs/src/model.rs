@@ -1,13 +1,13 @@
 //! A safe wrapper around `llama_model`.
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{CStr, CString, c_char};
 use std::num::NonZeroU16;
 use std::os::raw::c_int;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::str::Utf8Error;
 
-use crate::context::params::LlamaContextParams;
 use crate::context::LlamaContext;
+use crate::context::params::LlamaContextParams;
 use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
 use crate::token::LlamaToken;
@@ -184,8 +184,7 @@ impl LlamaModel {
     /// Get the decoder start token.
     #[must_use]
     pub fn decode_start_token(&self) -> LlamaToken {
-        let token =
-            unsafe { ggml_aio_sys::llama_model_decoder_start_token(self.model.as_ptr()) };
+        let token = unsafe { ggml_aio_sys::llama_model_decoder_start_token(self.model.as_ptr()) };
         LlamaToken(token)
     }
 
@@ -416,14 +415,7 @@ impl LlamaModel {
         let buf = string.into_raw();
         let lstrip = lstrip.map_or(0, |it| i32::from(it.get()));
         let size = unsafe {
-            ggml_aio_sys::llama_token_to_piece(
-                self.vocab_ptr(),
-                token.0,
-                buf,
-                len,
-                lstrip,
-                special,
-            )
+            ggml_aio_sys::llama_token_to_piece(self.vocab_ptr(), token.0, buf, len, lstrip, special)
         };
 
         match size {
@@ -499,8 +491,7 @@ impl LlamaModel {
     pub fn n_head_kv(&self) -> u32 {
         // It's never possible for this to panic because while the API interface is defined as an int32_t,
         // the field it's accessing is a uint32_t.
-        u32::try_from(unsafe { ggml_aio_sys::llama_model_n_head_kv(self.model.as_ptr()) })
-            .unwrap()
+        u32::try_from(unsafe { ggml_aio_sys::llama_model_n_head_kv(self.model.as_ptr()) }).unwrap()
     }
 
     /// Get metadata value as a string by key name

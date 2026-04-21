@@ -4,8 +4,8 @@ use std::env;
 
 use llama_cpp_rs::context::params::LlamaContextParams;
 use llama_cpp_rs::llama_backend::LlamaBackend;
-use llama_cpp_rs::model::params::LlamaModelParams;
 use llama_cpp_rs::model::LlamaModel;
+use llama_cpp_rs::model::params::LlamaModelParams;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let model_path = match env::var("LLAMA_MODEL_PATH") {

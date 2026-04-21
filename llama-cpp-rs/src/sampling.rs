@@ -1,15 +1,15 @@
 //! Safe wrapper around `llama_sampler`.
 
 use std::borrow::Borrow;
-use std::ffi::{c_char, CString};
+use std::ffi::{CString, c_char};
 use std::fmt::{Debug, Formatter};
 
+use crate::GrammarError;
 use crate::context::LlamaContext;
 use crate::model::LlamaModel;
+use crate::token::LlamaToken;
 use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::logit_bias::LlamaLogitBias;
-use crate::token::LlamaToken;
-use crate::GrammarError;
 
 /// A safe wrapper around `llama_sampler`.
 pub struct LlamaSampler {
@@ -26,9 +26,8 @@ impl LlamaSampler {
     /// Sample and accept a token from the idx-th output of the last evaluation
     #[must_use]
     pub fn sample(&mut self, ctx: &LlamaContext, idx: i32) -> LlamaToken {
-        let token = unsafe {
-            ggml_aio_sys::llama_sampler_sample(self.sampler, ctx.context.as_ptr(), idx)
-        };
+        let token =
+            unsafe { ggml_aio_sys::llama_sampler_sample(self.sampler, ctx.context.as_ptr(), idx) };
 
         LlamaToken(token)
     }
@@ -92,9 +91,10 @@ impl LlamaSampler {
     #[must_use]
     pub fn chain(samplers: impl IntoIterator<Item = Self>, no_perf: bool) -> Self {
         unsafe {
-            let chain = ggml_aio_sys::llama_sampler_chain_init(
-                ggml_aio_sys::llama_sampler_chain_params { no_perf },
-            );
+            let chain =
+                ggml_aio_sys::llama_sampler_chain_init(ggml_aio_sys::llama_sampler_chain_params {
+                    no_perf,
+                });
 
             for sampler in samplers {
                 ggml_aio_sys::llama_sampler_chain_add(chain, sampler.sampler);

@@ -158,9 +158,8 @@ impl Qwen3Tts {
         params: &Qwen3TtsParams,
     ) -> Result<Qwen3TtsAudio, Qwen3TtsError> {
         let text = CString::new(text)?;
-        let audio = unsafe {
-            ggml_aio_sys::qwen3_tts_synthesize(self.ptr, text.as_ptr(), &params.inner)
-        };
+        let audio =
+            unsafe { ggml_aio_sys::qwen3_tts_synthesize(self.ptr, text.as_ptr(), &params.inner) };
         self.audio_from_ptr(audio)
     }
 

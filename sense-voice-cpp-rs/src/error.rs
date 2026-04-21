@@ -1,4 +1,4 @@
-use std::ffi::{c_int, NulError};
+use std::ffi::{NulError, c_int};
 use std::str::Utf8Error;
 
 /// If you have not configured a logging trampoline with [crate::whisper_sys_log::install_whisper_log_trampoline] or

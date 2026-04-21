@@ -572,10 +572,7 @@ impl LlamaContextParams {
     /// let params = LlamaContextParams::default().with_cb_eval(Some(cb_eval_fn));
     /// ```
     #[must_use]
-    pub fn with_cb_eval(
-        mut self,
-        cb_eval: ggml_aio_sys::ggml_backend_sched_eval_callback,
-    ) -> Self {
+    pub fn with_cb_eval(mut self, cb_eval: ggml_aio_sys::ggml_backend_sched_eval_callback) -> Self {
         self.context_params.cb_eval = cb_eval;
         self
     }
